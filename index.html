@@ -1,0 +1,333 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="zen">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Sanctuary — Decompression Lab & Chill Oasis</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+
+  <!-- App Header -->
+  <header class="app-header">
+    <div class="brand-section">
+      <span class="brand-icon">🍃</span>
+      <div>
+        <div class="brand-title">Sanctuary</div>
+      </div>
+      <span class="brand-badge">Chill OS 1.0</span>
+    </div>
+
+    <div class="header-actions">
+      <select id="theme-selector" class="theme-select" aria-label="Select Theme">
+        <option value="zen">🍵 Zen Garden</option>
+        <option value="cyberpunk">🌌 Cyberpunk Chillhop</option>
+        <option value="retro98">💾 Windows 98 Retro</option>
+        <option value="coquette">🎀 Coquette & Slay</option>
+        <option value="corporate">🏢 Corporate Burnout Rehab</option>
+        <option value="brainrot">🧠 Brainrot Detox Lounge</option>
+        <option value="lofi">☕ Lo-Fi Studio Warmth</option>
+      </select>
+
+      <button id="btn-master-mute" class="btn-mute" title="Toggle Sound (Spacebar)">
+        <span id="mute-icon">🔊</span>
+        <span id="mute-text">Sound On</span>
+      </button>
+    </div>
+  </header>
+
+  <!-- Navigation Tabs -->
+  <main class="main-wrapper">
+    <nav class="nav-tabs" role="tablist">
+      <button class="tab-btn active" data-tab="tab-playground" role="tab" aria-selected="true">
+        <span>✨</span> Interactive Playgrounds
+      </button>
+      <button class="tab-btn" data-tab="tab-soundscape" role="tab" aria-selected="false">
+        <span>🎵</span> Soundscape Synth
+      </button>
+      <button class="tab-btn" data-tab="tab-breath" role="tab" aria-selected="false">
+        <span>🫁</span> Breath & Coherence Pacer
+      </button>
+      <button class="tab-btn" data-tab="tab-mind" role="tab" aria-selected="false">
+        <span>📜</span> Mental Truce & Tools
+      </button>
+    </nav>
+
+    <!-- Tab 1: Interactive Playgrounds -->
+    <section id="tab-playground" class="tab-content active" role="tabpanel">
+      <div class="grid-2col">
+        <!-- Canvas Viewport -->
+        <div class="card" style="padding: 16px;">
+          <div class="canvas-viewport">
+            <div class="canvas-toolbar">
+              <button class="mode-pill active" data-mode="fluid">🌊 Bioluminescent Fluid</button>
+              <button class="mode-pill" data-mode="bonsai">🎋 Fractal Bonsai</button>
+              <button class="mode-pill" data-mode="bubbles">🫧 Bubble Popper</button>
+            </div>
+            <canvas id="zen-main-canvas"></canvas>
+            <div class="canvas-hint" id="canvas-hint">Drag cursor to create glowing ripples & pentatonic chimes</div>
+          </div>
+
+          <!-- Thought Dissolver Action Bar -->
+          <div class="dissolver-box">
+            <input type="text" id="thought-input" class="text-input" placeholder="Type a worry, bug, or stressful thought to dissolve into stardust..." />
+            <button id="dissolve-btn" class="btn btn-primary">
+              <span>🌌</span> Vaporize Thought
+            </button>
+          </div>
+        </div>
+
+        <!-- Quick Relax Panel -->
+        <div class="card">
+          <h2 class="card-title"><span>🧘</span> Quick Calming Presets</h2>
+          <p class="card-subtitle">One-tap sensory resets for when you need immediate calm.</p>
+
+          <div style="display: flex; flex-direction: column; gap: 10px;">
+            <button class="btn quick-preset-btn" data-preset="midnight-rain" style="justify-content: flex-start;">
+              <span>🌧️</span> <strong>Midnight Rain & Lo-Fi</strong>
+            </button>
+            <button class="btn quick-preset-btn" data-preset="zen-garden" style="justify-content: flex-start;">
+              <span>🍵</span> <strong>Zen Temple & Wind</strong>
+            </button>
+            <button class="btn quick-preset-btn" data-preset="cozy-fireplace" style="justify-content: flex-start;">
+              <span>🪵</span> <strong>Fireplace & Purring Cat</strong>
+            </button>
+            <button class="btn quick-preset-btn" data-preset="adhd-focus-drone" style="justify-content: flex-start;">
+              <span>🧠</span> <strong>ADHD Theta Drone (6Hz)</strong>
+            </button>
+            <button class="btn quick-preset-btn" data-preset="deep-sleep" style="justify-content: flex-start;">
+              <span>🌊</span> <strong>Ocean & Delta Waves</strong>
+            </button>
+          </div>
+
+          <div style="margin-top: 24px; padding-top: 16px; border-top: 1px solid var(--panel-border);">
+            <div style="font-size: 13px; font-weight: 600; margin-bottom: 6px;">🔔 Manual Solfeggio Gong</div>
+            <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 10px;">Play a pure 432Hz harmonic singing bowl to clear mental clutter.</p>
+            <button id="btn-manual-chime" class="btn" style="width: 100%; justify-content: center;">
+              <span>🔔</span> Strike Tibetan Bowl (432Hz)
+            </button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Tab 2: Procedural Soundscape Synth -->
+    <section id="tab-soundscape" class="tab-content" role="tabpanel">
+      <div class="card">
+        <h2 class="card-title"><span>🎛️</span> Procedural Soundscape Synthesizer</h2>
+        <p class="card-subtitle">Zero external audio files. 100% synthesized in real-time with Web Audio API.</p>
+
+        <!-- Presets -->
+        <div class="presets-bar">
+          <span style="font-size: 13px; font-weight: 600; align-self: center;">Mix Presets:</span>
+          <button class="preset-chip" data-preset="midnight-rain">🌧️ Midnight Rain</button>
+          <button class="preset-chip" data-preset="zen-garden">🍵 Zen Garden</button>
+          <button class="preset-chip" data-preset="cozy-fireplace">🪵 Cozy Hearth</button>
+          <button class="preset-chip" data-preset="adhd-focus-drone">🧠 ADHD Focus</button>
+          <button class="preset-chip" data-preset="deep-sleep">🌊 Deep Sleep</button>
+        </div>
+
+        <!-- Mixer Sliders -->
+        <div class="mixer-grid">
+          <!-- Rain -->
+          <div class="slider-card">
+            <div class="slider-header">
+              <span class="slider-label"><span>🌧️</span> Rain on Window</span>
+              <span class="slider-val" id="val-rain">35%</span>
+            </div>
+            <input type="range" id="slider-rain" min="0" max="1" step="0.01" value="0.35" />
+          </div>
+
+          <!-- Generative Lo-Fi FM Chords -->
+          <div class="slider-card">
+            <div class="slider-header">
+              <span class="slider-label"><span>☕</span> Lo-Fi Generative Rhodes</span>
+              <span class="slider-val" id="val-lofi">30%</span>
+            </div>
+            <input type="range" id="slider-lofi" min="0" max="1" step="0.01" value="0.30" />
+          </div>
+
+          <!-- Fireplace -->
+          <div class="slider-card">
+            <div class="slider-header">
+              <span class="slider-label"><span>🪵</span> Fireplace Crackle</span>
+              <span class="slider-val" id="val-fire">0%</span>
+            </div>
+            <input type="range" id="slider-fire" min="0" max="1" step="0.01" value="0" />
+          </div>
+
+          <!-- Ocean -->
+          <div class="slider-card">
+            <div class="slider-header">
+              <span class="slider-label"><span>🌊</span> Ocean Tide Waves</span>
+              <span class="slider-val" id="val-ocean">25%</span>
+            </div>
+            <input type="range" id="slider-ocean" min="0" max="1" step="0.01" value="0.25" />
+          </div>
+
+          <!-- Wind -->
+          <div class="slider-card">
+            <div class="slider-header">
+              <span class="slider-label"><span>🍃</span> Forest Breeze</span>
+              <span class="slider-val" id="val-wind">0%</span>
+            </div>
+            <input type="range" id="slider-wind" min="0" max="1" step="0.01" value="0" />
+          </div>
+
+          <!-- Binaural Beats -->
+          <div class="slider-card">
+            <div class="slider-header">
+              <span class="slider-label"><span>🧘</span> Binaural Waves</span>
+              <span class="slider-val" id="val-binaural">15%</span>
+            </div>
+            <input type="range" id="slider-binaural" min="0" max="1" step="0.01" value="0.15" />
+            <div style="display: flex; gap: 6px; margin-top: 4px;">
+              <button class="mode-pill active binaural-chip" data-binaural="theta" style="flex: 1; padding: 4px;">Theta (6Hz)</button>
+              <button class="mode-pill binaural-chip" data-binaural="alpha" style="flex: 1; padding: 4px;">Alpha (10Hz)</button>
+              <button class="mode-pill binaural-chip" data-binaural="delta" style="flex: 1; padding: 4px;">Delta (2.5Hz)</button>
+            </div>
+          </div>
+
+          <!-- Cat Purr -->
+          <div class="slider-card">
+            <div class="slider-header">
+              <span class="slider-label"><span>🐱</span> Purring Cat</span>
+              <span class="slider-val" id="val-purr">0%</span>
+            </div>
+            <input type="range" id="slider-purr" min="0" max="1" step="0.01" value="0" />
+          </div>
+
+          <!-- Master Volume -->
+          <div class="slider-card" style="border-color: var(--accent-primary);">
+            <div class="slider-header">
+              <span class="slider-label"><span>🎚️</span> Master Output</span>
+              <span class="slider-val" id="val-master">80%</span>
+            </div>
+            <input type="range" id="slider-master" min="0" max="1" step="0.01" value="0.80" />
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Tab 3: Breath & Coherence Pacer -->
+    <section id="tab-breath" class="tab-content" role="tabpanel">
+      <div class="grid-2col">
+        <div class="card breath-container">
+          <div class="presets-bar" style="margin-bottom: 0;">
+            <button class="preset-chip active breath-pattern-btn" data-pattern="coherence">🌱 Coherence (5.5s)</button>
+            <button class="preset-chip breath-pattern-btn" data-pattern="box">📦 Box (4-4-4-4)</button>
+            <button class="preset-chip breath-pattern-btn" data-pattern="478">🌙 4-7-8 Deep Calm</button>
+            <button class="preset-chip breath-pattern-btn" data-pattern="sigh">😮‍💨 Physiological Sigh</button>
+          </div>
+
+          <div class="breath-canvas-wrap">
+            <canvas id="breath-canvas"></canvas>
+          </div>
+
+          <div class="breath-info-hud">
+            <div class="breath-phase-text" id="breath-phase-label">Ready to begin</div>
+            <div class="breath-timer-text" id="breath-timer-label">--</div>
+            <div class="breath-cycle-badge">Cycles completed: <span id="breath-cycle-count">0</span></div>
+          </div>
+
+          <div class="breath-controls">
+            <button id="btn-start-breath" class="btn btn-primary"><span>▶️</span> Start Breathing Guide</button>
+            <button id="btn-stop-breath" class="btn"><span>⏹️</span> Pause</button>
+          </div>
+        </div>
+
+        <!-- Explainer Card -->
+        <div class="card">
+          <h2 class="card-title"><span>🧬</span> Why This Works</h2>
+          <p class="card-subtitle">Neuroscience-backed autonomic nervous system resets.</p>
+          <div style="font-size: 13.5px; display: flex; flex-direction: column; gap: 14px; line-height: 1.6;">
+            <div>
+              <strong>🌱 Coherence (5.5s / 0.1Hz):</strong>
+              <div style="color: var(--text-muted);">Synchronizes heart rate variability (HRV) with respiration to balance sympathetic & parasympathetic systems.</div>
+            </div>
+            <div>
+              <strong>😮‍💨 Physiological Sigh:</strong>
+              <div style="color: var(--text-muted);">Two inhales pop open collapsed alveoli in the lungs; extended exhale offloads CO₂ and rapidly slows heart rate.</div>
+            </div>
+            <div>
+              <strong>📦 Box Breathing:</strong>
+              <div style="color: var(--text-muted);">Equal four-part cycle used by athletes and tactical teams to clear adrenaline spikes under intense cognitive load.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Tab 4: Mental Truce & Tools -->
+    <section id="tab-mind" class="tab-content" role="tabpanel">
+      <div class="grid-2col">
+        <!-- Permission Slip & Validation -->
+        <div class="card">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+            <h2 class="card-title"><span>📜</span> Official Permission Slip</h2>
+            <button id="new-slip-btn" class="btn"><span>🎲</span> Draw New Slip</button>
+          </div>
+          <p class="card-subtitle">Validation for when your brain feels pressured to keep performing.</p>
+
+          <div id="permission-slip-card" class="permission-slip-frame">
+            <div class="slip-header">
+              <span class="slip-badge">APPROVED • ZERO GUILT</span>
+              <span class="slip-issuer">Department of Nervous System Recovery</span>
+            </div>
+            <h3 class="slip-title">Official Permission Slip</h3>
+            <p class="slip-text">Permission granted to completely close all 54 open browser tabs, leave that Git branch unmerged until tomorrow, and relax with zero guilt.</p>
+            <div class="slip-footer">
+              <span>Date: Today</span>
+              <span class="signature">✨ Authorized by Sanctuary</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Anti-Burnout / Stress Shredder -->
+        <div class="card">
+          <h2 class="card-title"><span>🗑️</span> Stress & Corporate Slop Shredder</h2>
+          <p class="card-subtitle">Type whatever is annoying you (e.g. "per my last email", "unclear requirements") and shred it.</p>
+
+          <div style="display: flex; gap: 8px; margin-bottom: 12px;">
+            <input type="text" id="shred-input" class="text-input" placeholder="Enter annoying jargon or worry..." />
+            <button id="shred-btn" class="btn btn-primary"><span>✂️</span> Shred</button>
+          </div>
+
+          <div id="shred-animation" class="shredder-zone" style="display: none;"></div>
+          <div id="shred-status" style="font-size: 13px; color: var(--accent-primary); font-weight: 600;"></div>
+
+          <div style="margin-top: 24px; padding-top: 16px; border-top: 1px solid var(--panel-border);">
+            <div style="font-size: 13px; font-weight: 700; margin-bottom: 6px;">⚡ 2-Minute Micro Step Unblocker</div>
+            <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 8px;">Break executive dysfunction by committing to only 120 seconds of progress.</p>
+            <div style="display: flex; gap: 8px;">
+              <input type="text" id="micro-task-input" class="text-input" placeholder="Tiny 2-minute micro step..." />
+              <button id="micro-task-start" class="btn"><span>⏱️</span> Start (2m)</button>
+              <button id="micro-task-done" class="btn btn-primary" style="display: none;"><span>✅</span> Done!</button>
+            </div>
+            <div id="micro-task-timer" style="display: none; font-family: var(--font-mono); font-size: 20px; font-weight: 700; color: var(--accent-primary); margin-top: 8px;"></div>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- Status Bar / Footer -->
+  <footer class="footer-bar">
+    <div>
+      <span>🍃 <strong>Sanctuary</strong> — You are safe here. Take a breath and let your shoulders drop.</span>
+    </div>
+    <div style="display: flex; gap: 14px;">
+      <span><span class="shortcut-badge">Space</span> Mute/Unmute</span>
+      <span><span class="shortcut-badge">1-4</span> Switch Spaces</span>
+      <span><span class="shortcut-badge">T</span> Cycle Theme</span>
+    </div>
+  </footer>
+
+  <!-- Scripts -->
+  <script src="js/audio-engine.js"></script>
+  <script src="js/zen-canvas.js"></script>
+  <script src="js/breath-pacer.js"></script>
+  <script src="js/mind-tools.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
