@@ -1,18 +1,24 @@
 /**
  * Sanctuary Audio Engine
  * Pure Web Audio API Procedural Soundscape & Synthesizer
- * No external audio files needed - 100% synthesized in real-time.
+ * Built with speaker-safe dynamics compression, phone speaker EQ guards,
+ * polyphony voice limiting, and smooth background lo-fi FM generation.
  */
 
 class AudioEngine {
   constructor() {
     this.ctx = null;
     this.masterGain = null;
+    this.compressor = null;
+    this.hpFilter = null;
+    this.lpFilter = null;
     this.isMuted = false;
     this.isPlaying = false;
     this.generators = {};
     this.lofiTimer = null;
     this.lofiChordIndex = 0;
+    this.activeVoices = [];
+    this.maxConcurrentVoices = 6;
     this.volumeLevels = {
       rain: 0.35,
       fire: 0.0,
@@ -32,16 +38,48 @@ class AudioEngine {
     const AudioContext = window.AudioContext || window.webkitAudioContext;
     if (!AudioContext) return;
     this.ctx = new AudioContext();
+
+    // 1. Master Gain
     this.masterGain = this.ctx.createGain();
-    this.masterGain.gain.setValueAtTime(0.8, this.ctx.currentTime);
-    this.masterGain.connect(this.ctx.destination);
+    this.masterGain.gain.setValueAtTime(0.75, this.ctx.currentTime);
+
+    // 2. Speaker Safety EQ - Highpass guard (removes sub-bass DC offsets that strain phone speakers)
+    this.hpFilter = this.ctx.createBiquadFilter();
+    this.hpFilter.type = 'highpass';
+    this.hpFilter.frequency.setValueAtTime(45, this.ctx.currentTime);
+    this.hpFilter.Q.setValueAtTime(0.7, this.ctx.currentTime);
+
+    // 3. Speaker Safety EQ - Lowpass gentle smoothing (removes harsh digital aliasing)
+    this.lpFilter = this.ctx.createBiquadFilter();
+    this.lpFilter.type = 'lowpass';
+    this.lpFilter.frequency.setValueAtTime(14000, this.ctx.currentTime);
+    this.lpFilter.Q.setValueAtTime(0.7, this.ctx.currentTime);
+
+    // 4. Studio Dynamics Compressor / Brickwall Limiter (prevents overlap clipping & speaker blowout)
+    this.compressor = this.ctx.createDynamicsCompressor();
+    this.compressor.threshold.setValueAtTime(-14, this.ctx.currentTime); // dB
+    this.compressor.knee.setValueAtTime(12, this.ctx.currentTime);
+    this.compressor.ratio.setValueAtTime(8, this.ctx.currentTime);
+    this.compressor.attack.setValueAtTime(0.003, this.ctx.currentTime); // fast attack limiter
+    this.compressor.release.setValueAtTime(0.18, this.ctx.currentTime); // smooth decay
+
+    // Connect Master Chain: MasterGain -> HPFilter -> LPFilter -> Compressor -> Destination
+    this.masterGain.connect(this.hpFilter);
+    this.hpFilter.connect(this.lpFilter);
+    this.lpFilter.connect(this.compressor);
+    this.compressor.connect(this.ctx.destination);
+
     this.initialized = true;
   }
 
   async resume() {
     this.init();
     if (this.ctx && this.ctx.state === 'suspended') {
-      await this.ctx.resume();
+      try {
+        await this.ctx.resume();
+      } catch (e) {
+        console.warn('AudioContext resume deferred:', e);
+      }
     }
   }
 
@@ -54,15 +92,41 @@ class AudioEngine {
   toggleMute() {
     this.isMuted = !this.isMuted;
     if (this.masterGain && this.ctx) {
-      const target = this.isMuted ? 0 : 0.8;
+      const target = this.isMuted ? 0 : 0.75;
       this.masterGain.gain.setTargetAtTime(target, this.ctx.currentTime, 0.05);
     }
     return this.isMuted;
   }
 
-  // --- Noise Buffer Helpers ---
+  // --- Voice Stealing & Polyphony Management ---
+  registerVoice(nodes, gainNode) {
+    // Clean expired voices
+    this.activeVoices = this.activeVoices.filter(v => v.active && performance.now() < v.endTime);
+
+    // If exceeding concurrent voices, gracefully fade out oldest voice
+    if (this.activeVoices.length >= this.maxConcurrentVoices) {
+      const oldest = this.activeVoices.shift();
+      if (oldest && oldest.gainNode && this.ctx) {
+        try {
+          oldest.gainNode.gain.cancelScheduledValues(this.ctx.currentTime);
+          oldest.gainNode.gain.setTargetAtTime(0.0001, this.ctx.currentTime, 0.04);
+        } catch (e) {}
+      }
+    }
+
+    const voiceRecord = {
+      nodes,
+      gainNode,
+      active: true,
+      endTime: performance.now() + 4000
+    };
+    this.activeVoices.push(voiceRecord);
+    return voiceRecord;
+  }
+
+  // --- Noise Buffer Generation ---
   createPinkNoiseBuffer() {
-    const bufferSize = this.ctx.sampleRate * 5; // 5 seconds loop
+    const bufferSize = this.ctx.sampleRate * 4; // 4 seconds looped
     const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
     const output = buffer.getChannelData(0);
     let b0 = 0, b1 = 0, b2 = 0, b3 = 0, b4 = 0, b5 = 0, b6 = 0;
@@ -74,14 +138,14 @@ class AudioEngine {
       b3 = 0.86650 * b3 + white * 0.3104856;
       b4 = 0.55000 * b4 + white * 0.5329522;
       b5 = -0.7616 * b5 - white * 0.0168980;
-      output[i] = (b0 + b1 + b2 + b3 + b4 + b5 + b6 + white * 0.5362) * 0.08;
+      output[i] = (b0 + b1 + b2 + b3 + b4 + b5 + b6 + white * 0.5362) * 0.07;
       b6 = white * 0.115926;
     }
     return buffer;
   }
 
   createBrownNoiseBuffer() {
-    const bufferSize = this.ctx.sampleRate * 5;
+    const bufferSize = this.ctx.sampleRate * 4;
     const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
     const output = buffer.getChannelData(0);
     let lastOut = 0.0;
@@ -89,7 +153,7 @@ class AudioEngine {
       const white = Math.random() * 2 - 1;
       output[i] = (lastOut + (0.02 * white)) / 1.02;
       lastOut = output[i];
-      output[i] *= 2.8; // boost
+      output[i] *= 2.2;
     }
     return buffer;
   }
@@ -102,17 +166,16 @@ class AudioEngine {
     noiseSource.buffer = pinkBuffer;
     noiseSource.loop = true;
 
-    // Filters for rain texture
     const lowpass = this.ctx.createBiquadFilter();
     lowpass.type = 'lowpass';
-    lowpass.frequency.setValueAtTime(1400, this.ctx.currentTime);
+    lowpass.frequency.setValueAtTime(1250, this.ctx.currentTime);
 
     const highpass = this.ctx.createBiquadFilter();
     highpass.type = 'highpass';
-    highpass.frequency.setValueAtTime(250, this.ctx.currentTime);
+    highpass.frequency.setValueAtTime(300, this.ctx.currentTime);
 
     const gainNode = this.ctx.createGain();
-    gainNode.gain.setValueAtTime(this.volumeLevels.rain, this.ctx.currentTime);
+    gainNode.gain.setValueAtTime(this.volumeLevels.rain * 0.45, this.ctx.currentTime);
 
     noiseSource.connect(highpass);
     highpass.connect(lowpass);
@@ -140,23 +203,23 @@ class AudioEngine {
 
     const lowpass = this.ctx.createBiquadFilter();
     lowpass.type = 'lowpass';
-    lowpass.frequency.setValueAtTime(650, this.ctx.currentTime);
+    lowpass.frequency.setValueAtTime(600, this.ctx.currentTime);
 
     const gainNode = this.ctx.createGain();
-    gainNode.gain.setValueAtTime(this.volumeLevels.fire * 0.8, this.ctx.currentTime);
+    gainNode.gain.setValueAtTime(this.volumeLevels.fire * 0.4, this.ctx.currentTime);
 
     noiseSource.connect(lowpass);
     lowpass.connect(gainNode);
     gainNode.connect(this.masterGain);
     noiseSource.start();
 
-    // Procedural crackle pops
+    // Micro-pops with safety frequency bounds
     const popInterval = setInterval(() => {
       if (!this.generators.fire || this.volumeLevels.fire <= 0.01) return;
-      if (Math.random() < 0.45) {
+      if (Math.random() < 0.35) {
         this.triggerFirePop(this.volumeLevels.fire);
       }
-    }, 180);
+    }, 220);
 
     this.generators.fire = { source: noiseSource, gain: gainNode, interval: popInterval };
   }
@@ -168,21 +231,23 @@ class AudioEngine {
     const gain = this.ctx.createGain();
 
     osc.type = 'triangle';
-    osc.frequency.setValueAtTime(80 + Math.random() * 300, this.ctx.currentTime);
-    osc.frequency.exponentialRampToValueAtTime(30, this.ctx.currentTime + 0.04);
+    osc.frequency.setValueAtTime(90 + Math.random() * 180, this.ctx.currentTime);
+    osc.frequency.exponentialRampToValueAtTime(40, this.ctx.currentTime + 0.035);
 
-    filter.type = 'highpass';
-    filter.frequency.setValueAtTime(1200 + Math.random() * 2000, this.ctx.currentTime);
+    filter.type = 'bandpass';
+    filter.frequency.setValueAtTime(1400 + Math.random() * 1200, this.ctx.currentTime);
+    filter.Q.setValueAtTime(2.0, this.ctx.currentTime);
 
-    gain.gain.setValueAtTime(volume * (0.3 + Math.random() * 0.5), this.ctx.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.0001, this.ctx.currentTime + 0.035);
+    const targetVol = Math.min(0.25, volume * (0.15 + Math.random() * 0.2));
+    gain.gain.setValueAtTime(targetVol, this.ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.0001, this.ctx.currentTime + 0.03);
 
     osc.connect(filter);
     filter.connect(gain);
     gain.connect(this.masterGain);
 
     osc.start();
-    osc.stop(this.ctx.currentTime + 0.04);
+    osc.stop(this.ctx.currentTime + 0.035);
   }
 
   stopFire() {
@@ -205,18 +270,17 @@ class AudioEngine {
 
     const filter = this.ctx.createBiquadFilter();
     filter.type = 'lowpass';
-    filter.frequency.setValueAtTime(320, this.ctx.currentTime);
+    filter.frequency.setValueAtTime(340, this.ctx.currentTime);
 
-    // LFO for wave swelling
     const lfo = this.ctx.createOscillator();
     const lfoGain = this.ctx.createGain();
     lfo.type = 'sine';
-    lfo.frequency.setValueAtTime(0.08, this.ctx.currentTime); // ~12 second wave cycle
-    lfoGain.gain.setValueAtTime(240, this.ctx.currentTime);
+    lfo.frequency.setValueAtTime(0.075, this.ctx.currentTime); // ~13s gentle wave
+    lfoGain.gain.setValueAtTime(200, this.ctx.currentTime);
     lfo.connect(filter.frequency);
 
     const gainNode = this.ctx.createGain();
-    gainNode.gain.setValueAtTime(this.volumeLevels.ocean, this.ctx.currentTime);
+    gainNode.gain.setValueAtTime(this.volumeLevels.ocean * 0.4, this.ctx.currentTime);
 
     noiseSource.connect(filter);
     filter.connect(gainNode);
@@ -247,17 +311,17 @@ class AudioEngine {
 
     const bandpass = this.ctx.createBiquadFilter();
     bandpass.type = 'bandpass';
-    bandpass.Q.setValueAtTime(1.8, this.ctx.currentTime);
-    bandpass.frequency.setValueAtTime(450, this.ctx.currentTime);
+    bandpass.Q.setValueAtTime(1.5, this.ctx.currentTime);
+    bandpass.frequency.setValueAtTime(420, this.ctx.currentTime);
 
     const lfo = this.ctx.createOscillator();
     const lfoGain = this.ctx.createGain();
-    lfo.frequency.setValueAtTime(0.15, this.ctx.currentTime);
-    lfoGain.gain.setValueAtTime(200, this.ctx.currentTime);
+    lfo.frequency.setValueAtTime(0.12, this.ctx.currentTime);
+    lfoGain.gain.setValueAtTime(180, this.ctx.currentTime);
     lfo.connect(bandpass.frequency);
 
     const gainNode = this.ctx.createGain();
-    gainNode.gain.setValueAtTime(this.volumeLevels.wind * 0.7, this.ctx.currentTime);
+    gainNode.gain.setValueAtTime(this.volumeLevels.wind * 0.35, this.ctx.currentTime);
 
     noiseSource.connect(bandpass);
     bandpass.connect(gainNode);
@@ -278,15 +342,14 @@ class AudioEngine {
     }
   }
 
-  // --- Binaural Beats Generator ---
+  // --- Binaural Waves ---
   startBinaural() {
     if (this.generators.binaural) return;
-    const baseFreq = 216; // Sacred 432Hz subharmonic
-    let offset = 6; // theta default
+    const baseFreq = 216; // Harmonic overtone
+    let offset = 6;
     if (this.binauralMode === 'alpha') offset = 10;
     if (this.binauralMode === 'delta') offset = 2.5;
 
-    // Stereo Merger
     const merger = this.ctx.createChannelMerger(2);
 
     const oscLeft = this.ctx.createOscillator();
@@ -299,17 +362,17 @@ class AudioEngine {
 
     const gainLeft = this.ctx.createGain();
     const gainRight = this.ctx.createGain();
-    gainLeft.gain.setValueAtTime(0.5, this.ctx.currentTime);
-    gainRight.gain.setValueAtTime(0.5, this.ctx.currentTime);
+    gainLeft.gain.setValueAtTime(0.4, this.ctx.currentTime);
+    gainRight.gain.setValueAtTime(0.4, this.ctx.currentTime);
 
     oscLeft.connect(gainLeft);
-    gainLeft.connect(merger, 0, 0); // left channel
+    gainLeft.connect(merger, 0, 0);
 
     oscRight.connect(gainRight);
-    gainRight.connect(merger, 0, 1); // right channel
+    gainRight.connect(merger, 0, 1);
 
     const masterBinauralGain = this.ctx.createGain();
-    masterBinauralGain.gain.setValueAtTime(this.volumeLevels.binaural * 0.35, this.ctx.currentTime);
+    masterBinauralGain.gain.setValueAtTime(this.volumeLevels.binaural * 0.25, this.ctx.currentTime);
 
     merger.connect(masterBinauralGain);
     masterBinauralGain.connect(this.masterGain);
@@ -317,12 +380,7 @@ class AudioEngine {
     oscLeft.start();
     oscRight.start();
 
-    this.generators.binaural = {
-      oscLeft,
-      oscRight,
-      gain: masterBinauralGain,
-      baseFreq
-    };
+    this.generators.binaural = { oscLeft, oscRight, gain: masterBinauralGain, baseFreq };
   }
 
   setBinauralMode(mode) {
@@ -349,32 +407,30 @@ class AudioEngine {
     }
   }
 
-  // --- Cat Purr Synthesizer ---
+  // --- Purring Cat ---
   startPurr() {
     if (this.generators.purr) return;
     const osc1 = this.ctx.createOscillator();
     const osc2 = this.ctx.createOscillator();
     osc1.type = 'sine';
-    osc1.frequency.setValueAtTime(26, this.ctx.currentTime);
+    osc1.frequency.setValueAtTime(55, this.ctx.currentTime); // Safe speaker friendly fundamental
     osc2.type = 'sine';
-    osc2.frequency.setValueAtTime(52, this.ctx.currentTime);
+    osc2.frequency.setValueAtTime(110, this.ctx.currentTime);
 
-    // Tremolo LFO for purr chatter (23Hz)
     const tremolo = this.ctx.createOscillator();
     const tremoloGain = this.ctx.createGain();
     tremolo.type = 'sine';
-    tremolo.frequency.setValueAtTime(23, this.ctx.currentTime);
-    tremoloGain.gain.setValueAtTime(0.35, this.ctx.currentTime);
+    tremolo.frequency.setValueAtTime(22, this.ctx.currentTime);
+    tremoloGain.gain.setValueAtTime(0.3, this.ctx.currentTime);
 
-    // Breathing swell LFO (0.22Hz)
     const breathLfo = this.ctx.createOscillator();
     const breathGain = this.ctx.createGain();
     breathLfo.type = 'sine';
     breathLfo.frequency.setValueAtTime(0.22, this.ctx.currentTime);
-    breathGain.gain.setValueAtTime(0.25, this.ctx.currentTime);
+    breathGain.gain.setValueAtTime(0.2, this.ctx.currentTime);
 
     const purrGain = this.ctx.createGain();
-    purrGain.gain.setValueAtTime(this.volumeLevels.purr * 0.6, this.ctx.currentTime);
+    purrGain.gain.setValueAtTime(this.volumeLevels.purr * 0.35, this.ctx.currentTime);
 
     tremolo.connect(purrGain.gain);
     breathLfo.connect(purrGain.gain);
@@ -388,9 +444,7 @@ class AudioEngine {
     tremolo.start();
     breathLfo.start();
 
-    this.generators.purr = {
-      osc1, osc2, tremolo, breathLfo, gain: purrGain
-    };
+    this.generators.purr = { osc1, osc2, tremolo, breathLfo, gain: purrGain };
   }
 
   stopPurr() {
@@ -405,7 +459,7 @@ class AudioEngine {
     }
   }
 
-  // --- Generative Lo-Fi Electric Piano Progression ---
+  // --- Generative Lo-Fi Background Music FM Synthesizer ---
   startLofi() {
     if (this.generators.lofi) return;
     this.generators.lofi = { active: true };
@@ -414,80 +468,69 @@ class AudioEngine {
 
   scheduleNextLofiChord() {
     if (!this.generators.lofi || !this.generators.lofi.active) return;
-    if (this.volumeLevels.lofi > 0.01) {
+    if (this.volumeLevels.lofi > 0.01 && !this.isMuted) {
       this.playGenerativeLofiChord();
     }
-    // Chords change every 3.8 to 5.2 seconds
-    const delay = 3800 + Math.random() * 1400;
+    const delay = 4200 + Math.random() * 1200;
     this.lofiTimer = setTimeout(() => this.scheduleNextLofiChord(), delay);
   }
 
   playGenerativeLofiChord() {
     if (!this.ctx || this.isMuted) return;
 
-    // Rich soothing jazz/chill chords (frequencies in Hz)
+    // Smooth neo-soul / lo-fi progressions
     const chordProgressions = [
-      // Dmaj9
-      [146.83, 220.00, 277.18, 329.63, 440.00],
-      // Bm9
-      [123.47, 185.00, 246.94, 293.66, 370.00],
-      // Gmaj7#11
-      [98.00, 196.00, 246.94, 293.66, 370.00, 440.00],
-      // Asus4 / A13
-      [110.00, 164.81, 220.00, 293.66, 370.00],
-      // F#m7
-      [92.50, 185.00, 220.00, 277.18, 370.00],
-      // Emaj9
-      [82.41, 164.81, 246.94, 329.63, 392.00]
+      [146.83, 220.00, 277.18, 329.63, 440.00], // Dmaj9
+      [123.47, 185.00, 246.94, 293.66, 370.00], // Bm9
+      [130.81, 196.00, 246.94, 293.66, 392.00], // Cmaj7#11
+      [110.00, 164.81, 220.00, 293.66, 370.00], // A13sus
+      [164.81, 220.00, 261.63, 329.63, 392.00], // Em9
+      [138.59, 185.00, 220.00, 277.18, 370.00]  // F#m7
     ];
 
     const chord = chordProgressions[this.lofiChordIndex % chordProgressions.length];
     this.lofiChordIndex++;
 
     chord.forEach((freq, i) => {
-      // Strum delay
-      const strumOffset = i * (0.04 + Math.random() * 0.02);
+      const strumOffset = i * 0.045;
       this.playRhodesNote(freq, strumOffset, this.volumeLevels.lofi);
     });
 
-    // Occasional gentle high sparkle note
-    if (Math.random() < 0.6) {
-      const pentatonicSparkles = [587.33, 659.25, 739.99, 880.00, 987.77, 1174.66];
+    if (Math.random() < 0.5) {
+      const pentatonicSparkles = [587.33, 659.25, 739.99, 880.00, 987.77];
       const sparkleFreq = pentatonicSparkles[Math.floor(Math.random() * pentatonicSparkles.length)];
       setTimeout(() => {
-        this.playSingingBell(sparkleFreq, this.volumeLevels.lofi * 0.45, 2.8);
-      }, 800 + Math.random() * 1200);
+        this.playSingingBell(sparkleFreq, this.volumeLevels.lofi * 0.35, 2.5);
+      }, 1200 + Math.random() * 800);
     }
   }
 
   playRhodesNote(freq, delay, volume) {
     if (!this.ctx || this.isMuted) return;
     const startTime = this.ctx.currentTime + delay;
-    const duration = 3.6 + Math.random() * 0.8;
+    const duration = 3.8;
 
-    // Carrier oscillator (Warm sine)
     const osc = this.ctx.createOscillator();
     osc.type = 'sine';
     osc.frequency.setValueAtTime(freq, startTime);
 
-    // Subtle pitch drift / tape wow & flutter
+    // Warm tape flutter
     const vibrato = this.ctx.createOscillator();
     const vibratoGain = this.ctx.createGain();
-    vibrato.frequency.setValueAtTime(4.2 + Math.random() * 0.8, startTime);
-    vibratoGain.gain.setValueAtTime(freq * 0.003, startTime);
+    vibrato.frequency.setValueAtTime(3.8 + Math.random() * 0.5, startTime);
+    vibratoGain.gain.setValueAtTime(freq * 0.002, startTime);
     vibrato.connect(osc.frequency);
 
-    // Warm Lowpass Filter
     const filter = this.ctx.createBiquadFilter();
     filter.type = 'lowpass';
-    filter.frequency.setValueAtTime(freq * 3.2, startTime);
-    filter.frequency.exponentialRampToValueAtTime(freq * 1.1, startTime + duration);
+    filter.frequency.setValueAtTime(freq * 2.8, startTime);
+    filter.frequency.exponentialRampToValueAtTime(freq * 1.05, startTime + duration);
 
-    // Amp Envelope
     const gain = this.ctx.createGain();
+    const peakGain = Math.min(0.14, volume * 0.12);
     gain.gain.setValueAtTime(0.0001, startTime);
-    gain.gain.linearRampToValueAtTime(volume * 0.18, startTime + 0.08);
-    gain.gain.exponentialRampToValueAtTime(volume * 0.08, startTime + 0.8);
+    gain.gain.linearRampToValueAtTime(peakGain, startTime + 0.07);
+    gain.gain.exponentialRampToValueAtTime(peakGain * 0.45, startTime + 0.9);
     gain.gain.exponentialRampToValueAtTime(0.0001, startTime + duration);
 
     osc.connect(filter);
@@ -498,6 +541,8 @@ class AudioEngine {
     osc.start(startTime);
     vibrato.stop(startTime + duration);
     osc.stop(startTime + duration);
+
+    this.registerVoice([osc, vibrato], gain);
   }
 
   stopLofi() {
@@ -508,34 +553,45 @@ class AudioEngine {
     this.generators.lofi = null;
   }
 
-  // --- Sound Effects & Micro-Interactions ---
+  // --- Sound Effects & Micro-Interactions (Speaker Safe & Polyphony Limited) ---
 
-  // Tibetan / Solfeggio singing bowl chime
-  playSingingBell(freq = 432, volume = 0.3, duration = 3.5) {
+  // Singing Bowl / Bell
+  playSingingBell(freq = 432, volume = 0.25, duration = 3.0) {
     if (!this.ctx || this.isMuted) return;
     const now = this.ctx.currentTime;
-    const harmonics = [1, 2.76, 5.4, 8.93];
-    const gains = [0.6, 0.25, 0.12, 0.05];
+    const harmonics = [1, 2.76, 5.4];
+    const harmonicWeights = [0.55, 0.2, 0.08];
 
+    const masterBellGain = this.ctx.createGain();
+    const peak = Math.min(0.25, volume * 0.6);
+    masterBellGain.gain.setValueAtTime(0.0001, now);
+    masterBellGain.gain.linearRampToValueAtTime(peak, now + 0.025);
+    masterBellGain.gain.exponentialRampToValueAtTime(0.00001, now + duration);
+    masterBellGain.connect(this.masterGain);
+
+    const oscillators = [];
     harmonics.forEach((mult, i) => {
+      const targetF = freq * mult;
+      if (targetF > 12000) return; // Cut out piercing shrill highs for phone safety
+
       const osc = this.ctx.createOscillator();
-      const gain = this.ctx.createGain();
+      const oscGain = this.ctx.createGain();
       osc.type = 'sine';
-      osc.frequency.setValueAtTime(freq * mult, now);
+      osc.frequency.setValueAtTime(targetF, now);
+      oscGain.gain.setValueAtTime(harmonicWeights[i], now);
 
-      gain.gain.setValueAtTime(0.0001, now);
-      gain.gain.linearRampToValueAtTime(volume * gains[i], now + 0.03);
-      gain.gain.exponentialRampToValueAtTime(0.00001, now + duration);
-
-      osc.connect(gain);
-      gain.connect(this.masterGain);
+      osc.connect(oscGain);
+      oscGain.connect(masterBellGain);
 
       osc.start(now);
       osc.stop(now + duration);
+      oscillators.push(osc);
     });
+
+    this.registerVoice(oscillators, masterBellGain);
   }
 
-  // Tactile Bubble Pop / Water Droplet sound
+  // Tactile Bubble Pop / Water Droplet
   playBubblePop(pitchMod = 1.0) {
     if (!this.ctx || this.isMuted) return;
     const now = this.ctx.currentTime;
@@ -543,47 +599,48 @@ class AudioEngine {
     const gain = this.ctx.createGain();
 
     osc.type = 'sine';
-    const baseFreq = (480 + Math.random() * 260) * pitchMod;
+    const baseFreq = Math.min(1100, (480 + Math.random() * 200) * pitchMod);
     osc.frequency.setValueAtTime(baseFreq, now);
-    osc.frequency.exponentialRampToValueAtTime(baseFreq * 2.3, now + 0.055);
+    osc.frequency.exponentialRampToValueAtTime(baseFreq * 2.1, now + 0.045);
 
-    gain.gain.setValueAtTime(0.22, now);
-    gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.06);
+    gain.gain.setValueAtTime(0.16, now);
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.05);
 
     osc.connect(gain);
     gain.connect(this.masterGain);
 
     osc.start(now);
-    osc.stop(now + 0.065);
+    osc.stop(now + 0.055);
+
+    this.registerVoice([osc], gain);
   }
 
-  // Dissolver cosmic whoosh / stardust chime
+  // Thought Dissolver Cosmic Shimmer
   playDissolveEffect() {
     if (!this.ctx || this.isMuted) return;
     const now = this.ctx.currentTime;
+    const notes = [528, 660, 792, 1056, 1320];
 
-    // Cosmic shimmer arpeggio
-    const notes = [528, 660, 792, 1056, 1320, 1584];
     notes.forEach((freq, idx) => {
-      const delay = idx * 0.07;
+      const delay = idx * 0.06;
       const osc = this.ctx.createOscillator();
       const gain = this.ctx.createGain();
       osc.type = 'sine';
       osc.frequency.setValueAtTime(freq, now + delay);
 
       gain.gain.setValueAtTime(0.0001, now + delay);
-      gain.gain.linearRampToValueAtTime(0.18, now + delay + 0.02);
-      gain.gain.exponentialRampToValueAtTime(0.0001, now + delay + 1.4);
+      gain.gain.linearRampToValueAtTime(0.12, now + delay + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.0001, now + delay + 1.2);
 
       osc.connect(gain);
       gain.connect(this.masterGain);
 
       osc.start(now + delay);
-      osc.stop(now + delay + 1.5);
+      osc.stop(now + delay + 1.25);
     });
   }
 
-  // Breathing inhale / exhale guiding tone
+  // Breathing Guide Tone
   playBreathCue(type = 'inhale', duration = 4.0) {
     if (!this.ctx || this.isMuted) return;
     const now = this.ctx.currentTime;
@@ -593,16 +650,16 @@ class AudioEngine {
 
     osc.type = 'triangle';
     filter.type = 'lowpass';
-    filter.frequency.setValueAtTime(280, now);
+    filter.frequency.setValueAtTime(260, now);
 
-    const startFreq = type === 'inhale' ? 174 : 285;
-    const endFreq = type === 'inhale' ? 285 : 174;
+    const startFreq = type === 'inhale' ? 180 : 260;
+    const endFreq = type === 'inhale' ? 260 : 180;
 
     osc.frequency.setValueAtTime(startFreq, now);
     osc.frequency.exponentialRampToValueAtTime(endFreq, now + duration);
 
     gain.gain.setValueAtTime(0.001, now);
-    gain.gain.linearRampToValueAtTime(0.12, now + duration * 0.4);
+    gain.gain.linearRampToValueAtTime(0.09, now + duration * 0.35);
     gain.gain.linearRampToValueAtTime(0.001, now + duration);
 
     osc.connect(filter);
@@ -613,7 +670,7 @@ class AudioEngine {
     osc.stop(now + duration);
   }
 
-  // --- Controls & Sliders ---
+  // --- Volume & Preset Management ---
   setChannelVolume(channel, value) {
     const val = Math.max(0, Math.min(1, parseFloat(value)));
     this.volumeLevels[channel] = val;
@@ -630,18 +687,18 @@ class AudioEngine {
 
     const gen = this.generators[channel];
     if (gen && gen.gain && this.ctx) {
-      gen.gain.gain.setTargetAtTime(val, this.ctx.currentTime, 0.08);
+      const scaling = channel === 'lofi' ? 0.35 : (channel === 'binaural' ? 0.25 : 0.45);
+      gen.gain.gain.setTargetAtTime(val * scaling, this.ctx.currentTime, 0.08);
     }
   }
 
-  // Preset Configurations
   applyPreset(presetName) {
     const presets = {
-      'midnight-rain': { rain: 0.6, fire: 0.35, ocean: 0.0, wind: 0.1, lofi: 0.45, binaural: 0.15, purr: 0.0, chimes: 0.3 },
-      'zen-garden': { rain: 0.15, fire: 0.0, ocean: 0.35, wind: 0.25, lofi: 0.3, binaural: 0.25, purr: 0.0, chimes: 0.5 },
-      'cozy-fireplace': { rain: 0.3, fire: 0.7, ocean: 0.0, wind: 0.0, lofi: 0.4, binaural: 0.0, purr: 0.4, chimes: 0.1 },
-      'adhd-focus-drone': { rain: 0.15, fire: 0.0, ocean: 0.0, wind: 0.1, lofi: 0.0, binaural: 0.6, purr: 0.0, chimes: 0.0 },
-      'deep-sleep': { rain: 0.45, fire: 0.0, ocean: 0.5, wind: 0.15, lofi: 0.0, binaural: 0.4, purr: 0.2, chimes: 0.0 }
+      'midnight-rain': { rain: 0.55, fire: 0.3, ocean: 0.0, wind: 0.1, lofi: 0.4, binaural: 0.15, purr: 0.0, chimes: 0.25 },
+      'zen-garden': { rain: 0.15, fire: 0.0, ocean: 0.3, wind: 0.2, lofi: 0.3, binaural: 0.2, purr: 0.0, chimes: 0.4 },
+      'cozy-fireplace': { rain: 0.25, fire: 0.6, ocean: 0.0, wind: 0.0, lofi: 0.35, binaural: 0.0, purr: 0.35, chimes: 0.1 },
+      'adhd-focus-drone': { rain: 0.15, fire: 0.0, ocean: 0.0, wind: 0.1, lofi: 0.0, binaural: 0.5, purr: 0.0, chimes: 0.0 },
+      'deep-sleep': { rain: 0.4, fire: 0.0, ocean: 0.45, wind: 0.12, lofi: 0.0, binaural: 0.35, purr: 0.2, chimes: 0.0 }
     };
 
     const target = presets[presetName];

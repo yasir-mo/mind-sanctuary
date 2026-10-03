@@ -1,6 +1,7 @@
 /**
  * Sanctuary App Coordinator
- * State management, theme switching, UI wiring, and keyboard shortcuts.
+ * State management, theme switching, UI wiring, keyboard shortcuts,
+ * and mobile first-touch audio unlocking.
  */
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -9,6 +10,17 @@ document.addEventListener('DOMContentLoaded', () => {
   const breathPacer = new BreathPacer('breath-canvas');
   const mindTools = new MindTools();
   const audio = window.sanctuaryAudio;
+
+  // Global Mobile Audio Unlocker (ensures iOS Safari & Android Chrome unlock AudioContext on first touch)
+  const unlockAudio = async () => {
+    if (audio) await audio.resume();
+    document.removeEventListener('pointerdown', unlockAudio);
+    document.removeEventListener('touchstart', unlockAudio);
+    document.removeEventListener('click', unlockAudio);
+  };
+  document.addEventListener('pointerdown', unlockAudio, { passive: true, once: true });
+  document.addEventListener('touchstart', unlockAudio, { passive: true, once: true });
+  document.addEventListener('click', unlockAudio, { passive: true, once: true });
 
   // 2. Tab Navigation
   const tabButtons = document.querySelectorAll('.tab-btn');
@@ -25,11 +37,14 @@ document.addEventListener('DOMContentLoaded', () => {
       content.classList.toggle('active', content.id === tabId);
     });
 
-    if (tabId === 'tab-playground') {
-      zenCanvas.resize();
-    } else if (tabId === 'tab-breath') {
-      breathPacer.resize();
-    }
+    // Recalculate canvas size upon becoming visible
+    setTimeout(() => {
+      if (tabId === 'tab-playground') {
+        zenCanvas.resize();
+      } else if (tabId === 'tab-breath') {
+        breathPacer.resize();
+      }
+    }, 20);
   }
 
   tabButtons.forEach(btn => {
@@ -151,7 +166,7 @@ document.addEventListener('DOMContentLoaded', () => {
   if (chimeBtn) {
     chimeBtn.addEventListener('click', async () => {
       await audio.resume();
-      audio.playSingingBell(432, 0.45, 4.5);
+      audio.playSingingBell(432, 0.35, 4.0);
       zenCanvas.createRipple(zenCanvas.width / 2, zenCanvas.height / 2);
     });
   }
@@ -160,9 +175,9 @@ document.addEventListener('DOMContentLoaded', () => {
   const modePills = document.querySelectorAll('.mode-pill[data-mode]');
   const canvasHint = document.getElementById('canvas-hint');
   const hints = {
-    fluid: 'Drag cursor to create glowing ripples & pentatonic chimes',
-    bonsai: 'Click on the ground to grow fractal bonsai trees and blossoms',
-    bubbles: 'Click or drag across the bubble sheet to pop bubbles'
+    fluid: 'Touch or drag to create glowing ripples & pentatonic chimes',
+    bonsai: 'Tap the ground to grow fractal bonsai trees and blossoms',
+    bubbles: 'Tap or glide across the bubble sheet to pop bubbles'
   };
 
   modePills.forEach(pill => {
@@ -237,7 +252,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // 8. Keyboard Shortcuts
   window.addEventListener('keydown', async (e) => {
-    // Ignore hotkeys when typing in input fields
     if (['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement.tagName)) {
       return;
     }

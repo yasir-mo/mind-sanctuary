@@ -1,6 +1,6 @@
 /* ==========================================================================
    Sanctuary - Neurodivergent Decompression Lab & Relax Sanctuary
-   Theme Stylesheet & Component Architecture
+   Theme Stylesheet, Mobile Ergonomics & Pointer Physics
    ========================================================================== */
 
 :root {
@@ -132,6 +132,7 @@
   box-sizing: border-box;
   margin: 0;
   padding: 0;
+  -webkit-tap-highlight-color: transparent;
 }
 
 body {
@@ -146,6 +147,8 @@ body {
   overflow-x: hidden;
   line-height: 1.5;
   transition: background 0.4s ease, color 0.4s ease;
+  padding-top: env(safe-area-inset-top, 0px);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
 }
 
 /* Header & Top Bar */
@@ -153,37 +156,38 @@ body {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 14px 24px;
+  padding: 12px 20px;
   background: var(--panel-bg);
   backdrop-filter: var(--glass-blur);
   border-bottom: 1px solid var(--panel-border);
   position: sticky;
   top: 0;
   z-index: 50;
+  gap: 12px;
 }
 
 .brand-section {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
 }
 
 .brand-icon {
-  font-size: 26px;
+  font-size: 24px;
   animation: float-pulse 4s ease-in-out infinite;
 }
 
 .brand-title {
-  font-size: 20px;
+  font-size: 19px;
   font-weight: 700;
   letter-spacing: -0.02em;
 }
 
 .brand-badge {
-  font-size: 11px;
+  font-size: 10.5px;
   text-transform: uppercase;
   letter-spacing: 0.08em;
-  padding: 3px 8px;
+  padding: 2px 7px;
   border-radius: 12px;
   background: var(--card-bg);
   border: 1px solid var(--panel-border);
@@ -194,12 +198,13 @@ body {
 .header-actions {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
 }
 
 /* Theme Selector */
 .theme-select {
-  padding: 7px 12px;
+  padding: 8px 12px;
+  min-height: 38px;
   border-radius: var(--radius-sm);
   background: var(--card-bg);
   border: 1px solid var(--panel-border);
@@ -220,9 +225,10 @@ body {
   background: var(--card-bg);
   border: 1px solid var(--panel-border);
   color: var(--text-main);
-  padding: 7px 14px;
+  padding: 8px 14px;
+  min-height: 38px;
   border-radius: var(--radius-sm);
-  font-size: 14px;
+  font-size: 13.5px;
   font-weight: 600;
   cursor: pointer;
   display: flex;
@@ -241,20 +247,21 @@ body {
   max-width: 1360px;
   width: 100%;
   margin: 0 auto;
-  padding: 20px 24px 60px;
+  padding: 16px 20px 48px;
   flex: 1;
   display: flex;
   flex-direction: column;
-  gap: 24px;
+  gap: 20px;
 }
 
 /* Nav Tabs */
 .nav-tabs {
   display: flex;
   gap: 8px;
-  flex-wrap: wrap;
+  overflow-x: auto;
+  padding-bottom: 8px;
   border-bottom: 1px solid var(--panel-border);
-  padding-bottom: 12px;
+  -webkit-overflow-scrolling: touch;
 }
 
 .tab-btn {
@@ -262,14 +269,17 @@ body {
   backdrop-filter: var(--glass-blur);
   border: 1px solid var(--panel-border);
   color: var(--text-muted);
-  padding: 10px 18px;
+  padding: 10px 16px;
+  min-height: 42px;
   border-radius: var(--radius-md);
-  font-size: 14px;
+  font-size: 13.5px;
   font-weight: 600;
   cursor: pointer;
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 7px;
+  white-space: nowrap;
+  flex-shrink: 0;
   transition: all 0.2s;
 }
 
@@ -304,7 +314,7 @@ body {
 .grid-2col {
   display: grid;
   grid-template-columns: 1fr 340px;
-  gap: 24px;
+  gap: 20px;
 }
 
 @media (max-width: 960px) {
@@ -319,15 +329,15 @@ body {
   backdrop-filter: var(--glass-blur);
   border: 1px solid var(--panel-border);
   border-radius: var(--radius-lg);
-  padding: 24px;
+  padding: 20px;
   box-shadow: var(--shadow-glow);
   position: relative;
 }
 
 .card-title {
-  font-size: 18px;
+  font-size: 17px;
   font-weight: 700;
-  margin-bottom: 6px;
+  margin-bottom: 4px;
   display: flex;
   align-items: center;
   gap: 8px;
@@ -336,47 +346,69 @@ body {
 .card-subtitle {
   font-size: 13px;
   color: var(--text-muted);
-  margin-bottom: 18px;
+  margin-bottom: 16px;
 }
 
-/* Canvas Display Viewport */
+/* Canvas Display Viewport (Mobile Touch Optimized) */
 .canvas-viewport {
   width: 100%;
-  height: 520px;
+  height: 480px;
   border-radius: var(--radius-md);
   background: rgba(0, 0, 0, 0.4);
   border: 1px solid var(--panel-border);
   position: relative;
   overflow: hidden;
+  touch-action: none; /* Prevents scroll hijacking on mobile */
   cursor: crosshair;
+}
+
+@media (max-width: 640px) {
+  .canvas-viewport {
+    height: 380px;
+  }
+  .app-header {
+    flex-wrap: wrap;
+    padding: 10px 14px;
+  }
+  .brand-title {
+    font-size: 17px;
+  }
+  .main-wrapper {
+    padding: 12px 14px 40px;
+  }
 }
 
 .canvas-viewport canvas {
   display: block;
   width: 100%;
   height: 100%;
+  touch-action: none;
 }
 
 .canvas-toolbar {
   position: absolute;
-  top: 14px;
-  left: 14px;
+  top: 12px;
+  left: 12px;
   display: flex;
-  gap: 8px;
+  gap: 6px;
   z-index: 10;
+  flex-wrap: wrap;
 }
 
 .mode-pill {
-  padding: 6px 14px;
+  padding: 6px 12px;
+  min-height: 32px;
   border-radius: 20px;
-  background: rgba(0, 0, 0, 0.6);
-  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: rgba(0, 0, 0, 0.65);
+  border: 1px solid rgba(255, 255, 255, 0.25);
   color: #ffffff;
   font-size: 12px;
   font-weight: 600;
   cursor: pointer;
   backdrop-filter: blur(8px);
   transition: all 0.2s;
+  display: inline-flex;
+  align-items: center;
 }
 
 .mode-pill:hover,
@@ -388,11 +420,13 @@ body {
 
 .canvas-hint {
   position: absolute;
-  bottom: 14px;
-  right: 14px;
-  font-size: 12px;
-  color: rgba(255, 255, 255, 0.7);
-  background: rgba(0, 0, 0, 0.5);
+  bottom: 12px;
+  right: 12px;
+  left: 12px;
+  text-align: right;
+  font-size: 11.5px;
+  color: rgba(255, 255, 255, 0.8);
+  background: rgba(0, 0, 0, 0.55);
   padding: 4px 10px;
   border-radius: var(--radius-sm);
   backdrop-filter: blur(6px);
@@ -402,15 +436,15 @@ body {
 /* Soundscape Mixer Cards */
 .mixer-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-  gap: 16px;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 14px;
 }
 
 .slider-card {
   background: var(--card-bg);
   border: 1px solid var(--panel-border);
   border-radius: var(--radius-md);
-  padding: 16px;
+  padding: 14px;
   display: flex;
   flex-direction: column;
   gap: 10px;
@@ -423,7 +457,7 @@ body {
 }
 
 .slider-label {
-  font-size: 14px;
+  font-size: 13.5px;
   font-weight: 600;
   display: flex;
   align-items: center;
@@ -440,27 +474,28 @@ input[type="range"] {
   -webkit-appearance: none;
   appearance: none;
   width: 100%;
-  height: 6px;
+  height: 8px;
   border-radius: 4px;
-  background: rgba(255, 255, 255, 0.15);
+  background: rgba(255, 255, 255, 0.18);
   outline: none;
   cursor: pointer;
+  touch-action: pan-y;
 }
 
 input[type="range"]::-webkit-slider-thumb {
   -webkit-appearance: none;
   appearance: none;
-  width: 18px;
-  height: 18px;
+  width: 22px;
+  height: 22px;
   border-radius: 50%;
   background: var(--accent-primary);
   cursor: pointer;
-  box-shadow: 0 0 10px var(--accent-primary);
+  box-shadow: 0 0 8px var(--accent-primary);
   transition: transform 0.1s;
 }
 
 input[type="range"]::-webkit-slider-thumb:hover {
-  transform: scale(1.2);
+  transform: scale(1.15);
 }
 
 /* Soundscape Presets Bar */
@@ -468,24 +503,27 @@ input[type="range"]::-webkit-slider-thumb:hover {
   display: flex;
   gap: 8px;
   flex-wrap: wrap;
-  margin-bottom: 20px;
+  margin-bottom: 18px;
 }
 
 .preset-chip {
-  padding: 7px 14px;
+  padding: 8px 14px;
+  min-height: 38px;
   background: var(--card-bg);
   border: 1px solid var(--panel-border);
   border-radius: 20px;
   color: var(--text-main);
-  font-size: 13px;
+  font-size: 12.5px;
+  font-weight: 600;
   cursor: pointer;
   transition: all 0.2s;
-  display: flex;
+  display: inline-flex;
   align-items: center;
   gap: 6px;
 }
 
-.preset-chip:hover {
+.preset-chip:hover,
+.preset-chip.active {
   border-color: var(--accent-primary);
   background: var(--panel-bg);
   box-shadow: var(--shadow-glow);
@@ -497,54 +535,65 @@ input[type="range"]::-webkit-slider-thumb:hover {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 30px 10px;
-  gap: 20px;
+  padding: 24px 10px;
+  gap: 16px;
 }
 
 .breath-canvas-wrap {
-  width: 340px;
-  height: 340px;
+  width: 320px;
+  height: 320px;
   display: flex;
   align-items: center;
   justify-content: center;
+  touch-action: none;
+}
+
+@media (max-width: 480px) {
+  .breath-canvas-wrap {
+    width: 260px;
+    height: 260px;
+  }
 }
 
 .breath-info-hud {
   text-align: center;
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 4px;
 }
 
 .breath-phase-text {
-  font-size: 24px;
+  font-size: 22px;
   font-weight: 700;
   color: var(--accent-primary);
-  min-height: 36px;
+  min-height: 32px;
 }
 
 .breath-timer-text {
   font-family: var(--font-mono);
-  font-size: 32px;
+  font-size: 28px;
   font-weight: 700;
 }
 
 .breath-cycle-badge {
-  font-size: 13px;
+  font-size: 12.5px;
   color: var(--text-muted);
 }
 
 .breath-controls {
   display: flex;
-  gap: 12px;
-  margin-top: 10px;
+  gap: 10px;
+  margin-top: 8px;
+  flex-wrap: wrap;
+  justify-content: center;
 }
 
 /* Buttons */
 .btn {
-  padding: 10px 20px;
+  padding: 10px 18px;
+  min-height: 42px;
   border-radius: var(--radius-md);
-  font-size: 14px;
+  font-size: 13.5px;
   font-weight: 600;
   cursor: pointer;
   border: 1px solid var(--panel-border);
@@ -577,21 +626,24 @@ input[type="range"]::-webkit-slider-thumb:hover {
   color: #ffffff;
 }
 
-/* Thought Dissolver Input Box */
+/* Thought Dissolver Box */
 .dissolver-box {
   display: flex;
-  gap: 10px;
-  margin-top: 16px;
+  gap: 8px;
+  margin-top: 14px;
+  flex-wrap: wrap;
 }
 
 .text-input {
   flex: 1;
-  padding: 12px 16px;
+  min-width: 220px;
+  padding: 10px 14px;
+  min-height: 42px;
   border-radius: var(--radius-md);
   background: var(--card-bg);
   border: 1px solid var(--panel-border);
   color: var(--text-main);
-  font-size: 14px;
+  font-size: 13.5px;
   outline: none;
   transition: border-color 0.2s;
 }
@@ -606,11 +658,11 @@ input[type="range"]::-webkit-slider-thumb:hover {
   color: #1e1b18;
   border: 2px dashed #b45309;
   border-radius: var(--radius-md);
-  padding: 24px;
+  padding: 20px;
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
   position: relative;
   font-family: Georgia, serif;
-  margin-top: 12px;
+  margin-top: 10px;
 }
 
 .slip-header {
@@ -618,8 +670,8 @@ input[type="range"]::-webkit-slider-thumb:hover {
   justify-content: space-between;
   align-items: center;
   border-bottom: 1px solid #e5e0d8;
-  padding-bottom: 8px;
-  margin-bottom: 14px;
+  padding-bottom: 6px;
+  margin-bottom: 12px;
   font-family: var(--font-mono);
   font-size: 11px;
 }
@@ -627,44 +679,44 @@ input[type="range"]::-webkit-slider-thumb:hover {
 .slip-badge {
   background: #fee2e2;
   color: #991b1b;
-  padding: 2px 8px;
+  padding: 2px 7px;
   border-radius: 4px;
   font-weight: 700;
 }
 
 .slip-title {
-  font-size: 20px;
-  margin-bottom: 10px;
+  font-size: 18px;
+  margin-bottom: 8px;
   color: #78350f;
 }
 
 .slip-text {
-  font-size: 15px;
+  font-size: 14.5px;
   line-height: 1.6;
-  margin-bottom: 18px;
+  margin-bottom: 16px;
 }
 
 .slip-footer {
   display: flex;
   justify-content: space-between;
-  font-size: 12px;
+  font-size: 11.5px;
   color: #78716c;
   border-top: 1px solid #e5e0d8;
-  padding-top: 8px;
+  padding-top: 6px;
 }
 
 /* Stress Shredder Animation */
 .shredder-zone {
   position: relative;
   overflow: hidden;
-  min-height: 50px;
+  min-height: 48px;
 }
 
 .shred-strip {
   position: absolute;
   top: 0;
-  width: 14px;
-  height: 40px;
+  width: 12px;
+  height: 38px;
   border-radius: 3px;
   animation: shredDrop 1.2s cubic-bezier(0.25, 1, 0.5, 1) forwards;
 }
@@ -676,17 +728,17 @@ input[type="range"]::-webkit-slider-thumb:hover {
 
 @keyframes float-pulse {
   0%, 100% { transform: translateY(0); }
-  50% { transform: translateY(-4px); }
+  50% { transform: translateY(-3px); }
 }
 
 @keyframes fadeIn {
-  from { opacity: 0; transform: translateY(6px); }
+  from { opacity: 0; transform: translateY(4px); }
   to { opacity: 1; transform: translateY(0); }
 }
 
 /* Status Bar & Shortcuts */
 .footer-bar {
-  padding: 12px 24px;
+  padding: 10px 20px;
   background: var(--panel-bg);
   border-top: 1px solid var(--panel-border);
   font-size: 12px;
@@ -695,15 +747,15 @@ input[type="range"]::-webkit-slider-thumb:hover {
   align-items: center;
   justify-content: space-between;
   flex-wrap: wrap;
-  gap: 12px;
+  gap: 10px;
 }
 
 .shortcut-badge {
   background: var(--card-bg);
   border: 1px solid var(--panel-border);
-  padding: 2px 6px;
+  padding: 2px 5px;
   border-radius: 4px;
   font-family: var(--font-mono);
   color: var(--accent-primary);
-  font-size: 11px;
+  font-size: 10.5px;
 }
