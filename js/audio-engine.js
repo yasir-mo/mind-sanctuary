@@ -2,7 +2,7 @@
  * Sanctuary Audio Engine
  * Pure Web Audio API Procedural Soundscape & Synthesizer
  * Built with speaker-safe dynamics compression, phone speaker EQ guards,
- * polyphony voice limiting, and smooth background lo-fi FM generation.
+ * polyphony voice limiting, strict preset isolation, and smooth lo-fi FM generation.
  */
 
 class AudioEngine {
@@ -19,6 +19,7 @@ class AudioEngine {
     this.lofiChordIndex = 0;
     this.activeVoices = [];
     this.maxConcurrentVoices = 6;
+    this.allChannels = ['rain', 'fire', 'ocean', 'wind', 'lofi', 'binaural', 'purr'];
     this.volumeLevels = {
       rain: 0.35,
       fire: 0.0,
@@ -57,13 +58,13 @@ class AudioEngine {
 
     // 4. Studio Dynamics Compressor / Brickwall Limiter (prevents overlap clipping & speaker blowout)
     this.compressor = this.ctx.createDynamicsCompressor();
-    this.compressor.threshold.setValueAtTime(-14, this.ctx.currentTime); // dB
+    this.compressor.threshold.setValueAtTime(-14, this.ctx.currentTime);
     this.compressor.knee.setValueAtTime(12, this.ctx.currentTime);
     this.compressor.ratio.setValueAtTime(8, this.ctx.currentTime);
-    this.compressor.attack.setValueAtTime(0.003, this.ctx.currentTime); // fast attack limiter
-    this.compressor.release.setValueAtTime(0.18, this.ctx.currentTime); // smooth decay
+    this.compressor.attack.setValueAtTime(0.003, this.ctx.currentTime);
+    this.compressor.release.setValueAtTime(0.18, this.ctx.currentTime);
 
-    // Connect Master Chain: MasterGain -> HPFilter -> LPFilter -> Compressor -> Destination
+    // Master Chain: MasterGain -> HPFilter -> LPFilter -> Compressor -> Destination
     this.masterGain.connect(this.hpFilter);
     this.hpFilter.connect(this.lpFilter);
     this.lpFilter.connect(this.compressor);
@@ -100,10 +101,8 @@ class AudioEngine {
 
   // --- Voice Stealing & Polyphony Management ---
   registerVoice(nodes, gainNode) {
-    // Clean expired voices
     this.activeVoices = this.activeVoices.filter(v => v.active && performance.now() < v.endTime);
 
-    // If exceeding concurrent voices, gracefully fade out oldest voice
     if (this.activeVoices.length >= this.maxConcurrentVoices) {
       const oldest = this.activeVoices.shift();
       if (oldest && oldest.gainNode && this.ctx) {
@@ -124,9 +123,20 @@ class AudioEngine {
     return voiceRecord;
   }
 
+  clearAllActiveVoices() {
+    this.activeVoices.forEach(v => {
+      if (v.gainNode && this.ctx) {
+        try {
+          v.gainNode.gain.setTargetAtTime(0.0001, this.ctx.currentTime, 0.03);
+        } catch (e) {}
+      }
+    });
+    this.activeVoices = [];
+  }
+
   // --- Noise Buffer Generation ---
   createPinkNoiseBuffer() {
-    const bufferSize = this.ctx.sampleRate * 4; // 4 seconds looped
+    const bufferSize = this.ctx.sampleRate * 4;
     const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
     const output = buffer.getChannelData(0);
     let b0 = 0, b1 = 0, b2 = 0, b3 = 0, b4 = 0, b5 = 0, b6 = 0;
@@ -188,8 +198,17 @@ class AudioEngine {
 
   stopRain() {
     if (this.generators.rain) {
-      try { this.generators.rain.source.stop(); } catch (e) {}
-      this.generators.rain = null;
+      try {
+        this.generators.rain.gain.gain.setTargetAtTime(0.0001, this.ctx.currentTime, 0.05);
+        setTimeout(() => {
+          if (this.generators.rain && this.generators.rain.source) {
+            try { this.generators.rain.source.stop(); } catch (e) {}
+          }
+          this.generators.rain = null;
+        }, 80);
+      } catch (e) {
+        this.generators.rain = null;
+      }
     }
   }
 
@@ -213,9 +232,8 @@ class AudioEngine {
     gainNode.connect(this.masterGain);
     noiseSource.start();
 
-    // Micro-pops with safety frequency bounds
     const popInterval = setInterval(() => {
-      if (!this.generators.fire || this.volumeLevels.fire <= 0.01) return;
+      if (!this.generators.fire || this.volumeLevels.fire <= 0.005) return;
       if (Math.random() < 0.35) {
         this.triggerFirePop(this.volumeLevels.fire);
       }
@@ -254,9 +272,16 @@ class AudioEngine {
     if (this.generators.fire) {
       try {
         clearInterval(this.generators.fire.interval);
-        this.generators.fire.source.stop();
-      } catch (e) {}
-      this.generators.fire = null;
+        this.generators.fire.gain.gain.setTargetAtTime(0.0001, this.ctx.currentTime, 0.05);
+        setTimeout(() => {
+          if (this.generators.fire && this.generators.fire.source) {
+            try { this.generators.fire.source.stop(); } catch (e) {}
+          }
+          this.generators.fire = null;
+        }, 80);
+      } catch (e) {
+        this.generators.fire = null;
+      }
     }
   }
 
@@ -275,7 +300,7 @@ class AudioEngine {
     const lfo = this.ctx.createOscillator();
     const lfoGain = this.ctx.createGain();
     lfo.type = 'sine';
-    lfo.frequency.setValueAtTime(0.075, this.ctx.currentTime); // ~13s gentle wave
+    lfo.frequency.setValueAtTime(0.075, this.ctx.currentTime);
     lfoGain.gain.setValueAtTime(200, this.ctx.currentTime);
     lfo.connect(filter.frequency);
 
@@ -294,10 +319,19 @@ class AudioEngine {
   stopOcean() {
     if (this.generators.ocean) {
       try {
-        this.generators.ocean.source.stop();
-        this.generators.ocean.lfo.stop();
-      } catch (e) {}
-      this.generators.ocean = null;
+        this.generators.ocean.gain.gain.setTargetAtTime(0.0001, this.ctx.currentTime, 0.05);
+        setTimeout(() => {
+          if (this.generators.ocean) {
+            try {
+              this.generators.ocean.source.stop();
+              this.generators.ocean.lfo.stop();
+            } catch (e) {}
+          }
+          this.generators.ocean = null;
+        }, 80);
+      } catch (e) {
+        this.generators.ocean = null;
+      }
     }
   }
 
@@ -335,17 +369,26 @@ class AudioEngine {
   stopWind() {
     if (this.generators.wind) {
       try {
-        this.generators.wind.source.stop();
-        this.generators.wind.lfo.stop();
-      } catch (e) {}
-      this.generators.wind = null;
+        this.generators.wind.gain.gain.setTargetAtTime(0.0001, this.ctx.currentTime, 0.05);
+        setTimeout(() => {
+          if (this.generators.wind) {
+            try {
+              this.generators.wind.source.stop();
+              this.generators.wind.lfo.stop();
+            } catch (e) {}
+          }
+          this.generators.wind = null;
+        }, 80);
+      } catch (e) {
+        this.generators.wind = null;
+      }
     }
   }
 
   // --- Binaural Waves ---
   startBinaural() {
     if (this.generators.binaural) return;
-    const baseFreq = 216; // Harmonic overtone
+    const baseFreq = 216;
     let offset = 6;
     if (this.binauralMode === 'alpha') offset = 10;
     if (this.binauralMode === 'delta') offset = 2.5;
@@ -400,10 +443,19 @@ class AudioEngine {
   stopBinaural() {
     if (this.generators.binaural) {
       try {
-        this.generators.binaural.oscLeft.stop();
-        this.generators.binaural.oscRight.stop();
-      } catch (e) {}
-      this.generators.binaural = null;
+        this.generators.binaural.gain.gain.setTargetAtTime(0.0001, this.ctx.currentTime, 0.05);
+        setTimeout(() => {
+          if (this.generators.binaural) {
+            try {
+              this.generators.binaural.oscLeft.stop();
+              this.generators.binaural.oscRight.stop();
+            } catch (e) {}
+          }
+          this.generators.binaural = null;
+        }, 80);
+      } catch (e) {
+        this.generators.binaural = null;
+      }
     }
   }
 
@@ -413,7 +465,7 @@ class AudioEngine {
     const osc1 = this.ctx.createOscillator();
     const osc2 = this.ctx.createOscillator();
     osc1.type = 'sine';
-    osc1.frequency.setValueAtTime(55, this.ctx.currentTime); // Safe speaker friendly fundamental
+    osc1.frequency.setValueAtTime(55, this.ctx.currentTime);
     osc2.type = 'sine';
     osc2.frequency.setValueAtTime(110, this.ctx.currentTime);
 
@@ -450,25 +502,34 @@ class AudioEngine {
   stopPurr() {
     if (this.generators.purr) {
       try {
-        this.generators.purr.osc1.stop();
-        this.generators.purr.osc2.stop();
-        this.generators.purr.tremolo.stop();
-        this.generators.purr.breathLfo.stop();
-      } catch (e) {}
-      this.generators.purr = null;
+        this.generators.purr.gain.gain.setTargetAtTime(0.0001, this.ctx.currentTime, 0.05);
+        setTimeout(() => {
+          if (this.generators.purr) {
+            try {
+              this.generators.purr.osc1.stop();
+              this.generators.purr.osc2.stop();
+              this.generators.purr.tremolo.stop();
+              this.generators.purr.breathLfo.stop();
+            } catch (e) {}
+          }
+          this.generators.purr = null;
+        }, 80);
+      } catch (e) {
+        this.generators.purr = null;
+      }
     }
   }
 
   // --- Generative Lo-Fi Background Music FM Synthesizer ---
   startLofi() {
-    if (this.generators.lofi) return;
+    if (this.generators.lofi && this.generators.lofi.active) return;
     this.generators.lofi = { active: true };
     this.scheduleNextLofiChord();
   }
 
   scheduleNextLofiChord() {
     if (!this.generators.lofi || !this.generators.lofi.active) return;
-    if (this.volumeLevels.lofi > 0.01 && !this.isMuted) {
+    if (this.volumeLevels.lofi > 0.005 && !this.isMuted) {
       this.playGenerativeLofiChord();
     }
     const delay = 4200 + Math.random() * 1200;
@@ -478,14 +539,13 @@ class AudioEngine {
   playGenerativeLofiChord() {
     if (!this.ctx || this.isMuted) return;
 
-    // Smooth neo-soul / lo-fi progressions
     const chordProgressions = [
-      [146.83, 220.00, 277.18, 329.63, 440.00], // Dmaj9
-      [123.47, 185.00, 246.94, 293.66, 370.00], // Bm9
-      [130.81, 196.00, 246.94, 293.66, 392.00], // Cmaj7#11
-      [110.00, 164.81, 220.00, 293.66, 370.00], // A13sus
-      [164.81, 220.00, 261.63, 329.63, 392.00], // Em9
-      [138.59, 185.00, 220.00, 277.18, 370.00]  // F#m7
+      [146.83, 220.00, 277.18, 329.63, 440.00],
+      [123.47, 185.00, 246.94, 293.66, 370.00],
+      [130.81, 196.00, 246.94, 293.66, 392.00],
+      [110.00, 164.81, 220.00, 293.66, 370.00],
+      [164.81, 220.00, 261.63, 329.63, 392.00],
+      [138.59, 185.00, 220.00, 277.18, 370.00]
     ];
 
     const chord = chordProgressions[this.lofiChordIndex % chordProgressions.length];
@@ -500,7 +560,9 @@ class AudioEngine {
       const pentatonicSparkles = [587.33, 659.25, 739.99, 880.00, 987.77];
       const sparkleFreq = pentatonicSparkles[Math.floor(Math.random() * pentatonicSparkles.length)];
       setTimeout(() => {
-        this.playSingingBell(sparkleFreq, this.volumeLevels.lofi * 0.35, 2.5);
+        if (this.generators.lofi && this.generators.lofi.active) {
+          this.playSingingBell(sparkleFreq, this.volumeLevels.lofi * 0.35, 2.5);
+        }
       }, 1200 + Math.random() * 800);
     }
   }
@@ -514,7 +576,6 @@ class AudioEngine {
     osc.type = 'sine';
     osc.frequency.setValueAtTime(freq, startTime);
 
-    // Warm tape flutter
     const vibrato = this.ctx.createOscillator();
     const vibratoGain = this.ctx.createGain();
     vibrato.frequency.setValueAtTime(3.8 + Math.random() * 0.5, startTime);
@@ -553,9 +614,7 @@ class AudioEngine {
     this.generators.lofi = null;
   }
 
-  // --- Sound Effects & Micro-Interactions (Speaker Safe & Polyphony Limited) ---
-
-  // Singing Bowl / Bell
+  // --- Sound Effects & Chimes ---
   playSingingBell(freq = 432, volume = 0.25, duration = 3.0) {
     if (!this.ctx || this.isMuted) return;
     const now = this.ctx.currentTime;
@@ -572,7 +631,7 @@ class AudioEngine {
     const oscillators = [];
     harmonics.forEach((mult, i) => {
       const targetF = freq * mult;
-      if (targetF > 12000) return; // Cut out piercing shrill highs for phone safety
+      if (targetF > 12000) return;
 
       const osc = this.ctx.createOscillator();
       const oscGain = this.ctx.createGain();
@@ -591,7 +650,6 @@ class AudioEngine {
     this.registerVoice(oscillators, masterBellGain);
   }
 
-  // Tactile Bubble Pop / Water Droplet
   playBubblePop(pitchMod = 1.0) {
     if (!this.ctx || this.isMuted) return;
     const now = this.ctx.currentTime;
@@ -615,7 +673,6 @@ class AudioEngine {
     this.registerVoice([osc], gain);
   }
 
-  // Thought Dissolver Cosmic Shimmer
   playDissolveEffect() {
     if (!this.ctx || this.isMuted) return;
     const now = this.ctx.currentTime;
@@ -640,7 +697,6 @@ class AudioEngine {
     });
   }
 
-  // Breathing Guide Tone
   playBreathCue(type = 'inhale', duration = 4.0) {
     if (!this.ctx || this.isMuted) return;
     const now = this.ctx.currentTime;
@@ -670,20 +726,34 @@ class AudioEngine {
     osc.stop(now + duration);
   }
 
-  // --- Volume & Preset Management ---
+  // --- Channel Volume & Proper Teardown ---
+  stopChannel(channel) {
+    if (channel === 'rain') this.stopRain();
+    else if (channel === 'fire') this.stopFire();
+    else if (channel === 'ocean') this.stopOcean();
+    else if (channel === 'wind') this.stopWind();
+    else if (channel === 'binaural') this.stopBinaural();
+    else if (channel === 'purr') this.stopPurr();
+    else if (channel === 'lofi') this.stopLofi();
+  }
+
   setChannelVolume(channel, value) {
     const val = Math.max(0, Math.min(1, parseFloat(value)));
     this.volumeLevels[channel] = val;
 
-    if (val > 0.01) {
-      if (channel === 'rain') this.startRain();
-      if (channel === 'fire') this.startFire();
-      if (channel === 'ocean') this.startOcean();
-      if (channel === 'wind') this.startWind();
-      if (channel === 'binaural') this.startBinaural();
-      if (channel === 'purr') this.startPurr();
-      if (channel === 'lofi') this.startLofi();
+    if (val <= 0.005) {
+      this.stopChannel(channel);
+      return;
     }
+
+    // Start if not active
+    if (channel === 'rain') this.startRain();
+    else if (channel === 'fire') this.startFire();
+    else if (channel === 'ocean') this.startOcean();
+    else if (channel === 'wind') this.startWind();
+    else if (channel === 'binaural') this.startBinaural();
+    else if (channel === 'purr') this.startPurr();
+    else if (channel === 'lofi') this.startLofi();
 
     const gen = this.generators[channel];
     if (gen && gen.gain && this.ctx) {
@@ -692,21 +762,28 @@ class AudioEngine {
     }
   }
 
+  // Preset Configurations with complete isolation
   applyPreset(presetName) {
     const presets = {
-      'midnight-rain': { rain: 0.55, fire: 0.3, ocean: 0.0, wind: 0.1, lofi: 0.4, binaural: 0.15, purr: 0.0, chimes: 0.25 },
-      'zen-garden': { rain: 0.15, fire: 0.0, ocean: 0.3, wind: 0.2, lofi: 0.3, binaural: 0.2, purr: 0.0, chimes: 0.4 },
-      'cozy-fireplace': { rain: 0.25, fire: 0.6, ocean: 0.0, wind: 0.0, lofi: 0.35, binaural: 0.0, purr: 0.35, chimes: 0.1 },
-      'adhd-focus-drone': { rain: 0.15, fire: 0.0, ocean: 0.0, wind: 0.1, lofi: 0.0, binaural: 0.5, purr: 0.0, chimes: 0.0 },
-      'deep-sleep': { rain: 0.4, fire: 0.0, ocean: 0.45, wind: 0.12, lofi: 0.0, binaural: 0.35, purr: 0.2, chimes: 0.0 }
+      'midnight-rain': { rain: 0.55, fire: 0.3, ocean: 0.0, wind: 0.1, lofi: 0.4, binaural: 0.15, purr: 0.0 },
+      'zen-garden': { rain: 0.15, fire: 0.0, ocean: 0.3, wind: 0.2, lofi: 0.3, binaural: 0.2, purr: 0.0 },
+      'cozy-fireplace': { rain: 0.25, fire: 0.6, ocean: 0.0, wind: 0.0, lofi: 0.35, binaural: 0.0, purr: 0.35 },
+      'adhd-focus-drone': { rain: 0.15, fire: 0.0, ocean: 0.0, wind: 0.1, lofi: 0.0, binaural: 0.5, purr: 0.0 },
+      'deep-sleep': { rain: 0.4, fire: 0.0, ocean: 0.45, wind: 0.12, lofi: 0.0, binaural: 0.35, purr: 0.2 }
     };
 
     const target = presets[presetName];
-    if (!target) return;
+    if (!target) return null;
 
-    Object.keys(target).forEach(channel => {
-      this.setChannelVolume(channel, target[channel]);
+    // Reset/fade previous voices
+    this.clearAllActiveVoices();
+
+    // Explicitly apply new volume or cleanly stop inactive channels
+    this.allChannels.forEach(channel => {
+      const targetVol = target[channel] !== undefined ? target[channel] : 0.0;
+      this.setChannelVolume(channel, targetVol);
     });
+
     return target;
   }
 }

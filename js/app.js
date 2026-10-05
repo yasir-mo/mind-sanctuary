@@ -1,7 +1,7 @@
 /**
  * Sanctuary App Coordinator
  * State management, theme switching, UI wiring, keyboard shortcuts,
- * and mobile first-touch audio unlocking.
+ * preset sync/isolation, and mobile first-touch audio unlocking.
  */
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -11,7 +11,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const mindTools = new MindTools();
   const audio = window.sanctuaryAudio;
 
-  // Global Mobile Audio Unlocker (ensures iOS Safari & Android Chrome unlock AudioContext on first touch)
+  // Global Mobile Audio Unlocker
   const unlockAudio = async () => {
     if (audio) await audio.resume();
     document.removeEventListener('pointerdown', unlockAudio);
@@ -37,7 +37,6 @@ document.addEventListener('DOMContentLoaded', () => {
       content.classList.toggle('active', content.id === tabId);
     });
 
-    // Recalculate canvas size upon becoming visible
     setTimeout(() => {
       if (tabId === 'tab-playground') {
         zenCanvas.resize();
@@ -75,7 +74,6 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // Restore saved theme
   const savedTheme = localStorage.getItem('sanctuary_theme');
   if (savedTheme && themes.includes(savedTheme)) {
     applyTheme(savedTheme);
@@ -100,14 +98,27 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // Sliders
+  // Presets & Sliders Sync
+  const allPresetButtons = document.querySelectorAll('[data-preset]');
   const channels = ['rain', 'lofi', 'fire', 'ocean', 'wind', 'binaural', 'purr'];
+
+  function syncSlidersFromAudio(presetObj) {
+    channels.forEach(ch => {
+      const vol = presetObj[ch] !== undefined ? presetObj[ch] : 0;
+      const slider = document.getElementById(`slider-${ch}`);
+      const valDisplay = document.getElementById(`val-${ch}`);
+      if (slider) slider.value = vol;
+      if (valDisplay) valDisplay.textContent = `${Math.round(vol * 100)}%`;
+    });
+  }
+
   channels.forEach(ch => {
     const slider = document.getElementById(`slider-${ch}`);
     const valDisplay = document.getElementById(`val-${ch}`);
     if (slider) {
       slider.addEventListener('input', async (e) => {
         await audio.resume();
+        allPresetButtons.forEach(b => b.classList.remove('active'));
         const val = parseFloat(e.target.value);
         audio.setChannelVolume(ch, val);
         if (valDisplay) valDisplay.textContent = `${Math.round(val * 100)}%`;
@@ -126,6 +137,25 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
+  // Preset Buttons Handling
+  allPresetButtons.forEach(btn => {
+    btn.addEventListener('click', async () => {
+      await audio.resume();
+      const presetName = btn.getAttribute('data-preset');
+      
+      allPresetButtons.forEach(b => {
+        const isMatch = b.getAttribute('data-preset') === presetName;
+        b.classList.toggle('active', isMatch);
+      });
+
+      const presetObj = audio.applyPreset(presetName);
+      if (presetObj) {
+        syncSlidersFromAudio(presetObj);
+      }
+      audio.playSingingBell(432, 0.2, 2.5);
+    });
+  });
+
   // Binaural frequency mode pills
   const binauralChips = document.querySelectorAll('.binaural-chip');
   binauralChips.forEach(chip => {
@@ -135,29 +165,6 @@ document.addEventListener('DOMContentLoaded', () => {
       chip.classList.add('active');
       const mode = chip.getAttribute('data-binaural');
       audio.setBinauralMode(mode);
-    });
-  });
-
-  // Soundscape Preset Chips & Quick Buttons
-  function syncSlidersFromAudio(presetObj) {
-    Object.keys(presetObj).forEach(ch => {
-      const slider = document.getElementById(`slider-${ch}`);
-      const valDisplay = document.getElementById(`val-${ch}`);
-      if (slider) slider.value = presetObj[ch];
-      if (valDisplay) valDisplay.textContent = `${Math.round(presetObj[ch] * 100)}%`;
-    });
-  }
-
-  const allPresetButtons = document.querySelectorAll('[data-preset]');
-  allPresetButtons.forEach(btn => {
-    btn.addEventListener('click', async () => {
-      await audio.resume();
-      const presetName = btn.getAttribute('data-preset');
-      const presetObj = audio.applyPreset(presetName);
-      if (presetObj) {
-        syncSlidersFromAudio(presetObj);
-      }
-      audio.playSingingBell(432, 0.2, 2.5);
     });
   });
 
